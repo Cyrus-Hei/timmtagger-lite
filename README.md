@@ -17,6 +17,8 @@ It uses the `Mooshie/caformer_b36.dbv4-full` model by default and supports both 
 
 ## Installation
 
+*Note: This project is verified and tested on **Python 3.11** (Windows).*
+
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/Cyrus-Hei/timmtagger-lite.git
