@@ -96,5 +96,5 @@ for path, (general, character, rating) in zip(image_paths, batch_results):
 
 This project is a lightweight, customized extraction focusing exclusively on anime image tagging. I want to acknowledge and thank:
 - **[imgutils](https://github.com/deepghs/imgutils)** and its authors (**narugo1992** and **7eu7d7**) for the original, feature-rich repository from which this tagger was extracted.
-- **[animetimm](https://huggingface.co/animetimm)** (and contributor **[Mooshie](https://huggingface.co/Mooshie)**) on Hugging Face for training and hosting the multi-label CAFormer models used in this project.
+- **[animetimm](https://huggingface.co/animetimm)** (and un-gater **[Mooshie](https://huggingface.co/Mooshie)**) on Hugging Face for training and open-weighting the multi-label CAFormer models used in this project.
 
