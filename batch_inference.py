@@ -1,9 +1,5 @@
-from imgutils.generic import multilabel_timm_predict_batch
-from imgutils.tagging import tags_to_text
 from pathlib import Path
 import argparse
-import onnxruntime as ort
-ort.preload_dlls()
 
 def main():
     parser = argparse.ArgumentParser(description="Tag anime images in a directory using a multi-label model in batch.")
@@ -15,6 +11,7 @@ def main():
     parser.add_argument("--gen-threshold", type=float, default=0.39, help="Threshold for general tags")
     parser.add_argument("--char-threshold", type=float, default=0.47, help="Threshold for character tags")
     parser.add_argument("--rating-threshold", type=float, default=0.39, help="Threshold for rating tags")
+    parser.add_argument("--batch-size", type=int, default=16, help="Batch size for model inference to prevent VRAM OOM")
     
     args = parser.parse_args()
     img_folder = Path(args.folder_path)
@@ -34,11 +31,17 @@ def main():
         
     print(f"Found {len(image_paths)} images. Starting batch prediction...")
     
+    import onnxruntime as ort
+    ort.preload_dlls()
+    from imgutils.generic import multilabel_timm_predict_batch
+    from imgutils.tagging import tags_to_text
+    
     batch_results = multilabel_timm_predict_batch(
         [p.resolve() for p in image_paths],
         hf_token=args.hf_token,
         repo_id=args.model,
         fmt=('general', 'character', 'rating'),
+        batch_size=args.batch_size,
     )
     
     for file_path, (general, character, rating) in zip(image_paths, batch_results):

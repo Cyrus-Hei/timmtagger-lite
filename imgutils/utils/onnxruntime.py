@@ -27,16 +27,21 @@ def _ensure_onnxruntime():
             pip_install(['onnxruntime'], silent=True)
 
 
-_ensure_onnxruntime()
-from onnxruntime import get_available_providers, get_all_providers, InferenceSession, SessionOptions, \
-    GraphOptimizationLevel
+_alias = None
 
-alias = {
-    'gpu': "DmlExecutionProvider" if "DmlExecutionProvider" in get_available_providers() else "CUDAExecutionProvider",
-    'dml': "DmlExecutionProvider",
-    'directml': "DmlExecutionProvider",
-    "trt": "TensorrtExecutionProvider",
-}
+
+def _get_alias():
+    global _alias
+    if _alias is None:
+        _ensure_onnxruntime()
+        from onnxruntime import get_available_providers
+        _alias = {
+            'gpu': "DmlExecutionProvider" if "DmlExecutionProvider" in get_available_providers() else "CUDAExecutionProvider",
+            'dml': "DmlExecutionProvider",
+            'directml': "DmlExecutionProvider",
+            "trt": "TensorrtExecutionProvider",
+        }
+    return _alias
 
 
 def get_onnx_provider(provider: Optional[str] = None):
@@ -48,6 +53,9 @@ def get_onnx_provider(provider: Optional[str] = None):
         if ``DmlExecutionProvider`` or ``CUDAExecutionProvider`` is available.
     :return: String of the provider.
     """
+    _ensure_onnxruntime()
+    from onnxruntime import get_available_providers, get_all_providers
+
     if not provider:
         if "DmlExecutionProvider" in get_available_providers():
             return "DmlExecutionProvider"
@@ -55,8 +63,8 @@ def get_onnx_provider(provider: Optional[str] = None):
             return "CUDAExecutionProvider"
         else:
             return "CPUExecutionProvider"
-    elif provider.lower() in alias:
-        return alias[provider.lower()]
+    elif provider.lower() in _get_alias():
+        return _get_alias()[provider.lower()]
     else:
         for p in get_all_providers():
             if provider.lower() == p.lower() or f'{provider}ExecutionProvider'.lower() == p.lower():
@@ -66,7 +74,9 @@ def get_onnx_provider(provider: Optional[str] = None):
                          f'but unsupported provider {provider!r} found.')
 
 
-def _open_onnx_model(ckpt: str, provider: str, use_cpu: bool = True) -> InferenceSession:
+def _open_onnx_model(ckpt: str, provider: str, use_cpu: bool = True) -> 'InferenceSession':
+    _ensure_onnxruntime()
+    from onnxruntime import InferenceSession, SessionOptions, GraphOptimizationLevel
     options = SessionOptions()
     if provider == "DmlExecutionProvider":
         options.graph_optimization_level = GraphOptimizationLevel.ORT_ENABLE_BASIC
@@ -84,7 +94,7 @@ def _open_onnx_model(ckpt: str, provider: str, use_cpu: bool = True) -> Inferenc
     return InferenceSession(ckpt, options, providers=providers)
 
 
-def open_onnx_model(ckpt: str, mode: str = None) -> InferenceSession:
+def open_onnx_model(ckpt: str, mode: str = None) -> 'InferenceSession':
     """
     Overview:
         Open an ONNX model and load its ONNX runtime.

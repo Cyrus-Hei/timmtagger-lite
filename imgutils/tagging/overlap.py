@@ -2,8 +2,6 @@ import copy
 import json
 from typing import Mapping, List, Union
 
-from huggingface_hub import hf_hub_download
-
 from ..utils import ts_lru_cache
 
 
@@ -17,6 +15,7 @@ def _get_overlap_tags() -> Mapping[str, List[str]]:
     :return: A dictionary where keys are tags and values are lists of overlapping tags.
     :rtype: Mapping[str, List[str]]
     """
+    from huggingface_hub import hf_hub_download
     json_file = hf_hub_download(
         'alea31415/tag_filtering',
         'overlap_tags_simplified.json',

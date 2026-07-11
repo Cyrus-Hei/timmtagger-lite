@@ -4,8 +4,6 @@ Overview:
 """
 from typing import Union, List, Mapping, Set, Optional, Tuple
 
-from huggingface_hub import hf_hub_download
-
 from .match import _words_to_matcher, _split_to_words
 from ..utils import ts_lru_cache
 
@@ -18,6 +16,7 @@ def _load_online_blacklist() -> List[str]:
     :return: List of blacklisted tags.
     :rtype: List[str]
     """
+    from huggingface_hub import hf_hub_download
     with open(hf_hub_download(
             'alea31415/tag_filtering',
             'blacklist_tags.txt',

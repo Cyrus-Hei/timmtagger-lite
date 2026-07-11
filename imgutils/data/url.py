@@ -17,12 +17,8 @@ Main components:
 import io
 from typing import Optional
 
-import pyrfc6266
 from PIL import Image
 from hbutils.system import urlsplit
-from huggingface_hub import get_session
-from tqdm import tqdm
-from urlobject import URLObject
 
 __all__ = [
     'download_image_from_url',
@@ -58,6 +54,10 @@ def download_image_from_url(url: str, silent: bool = False, expected_size: Optio
         url = _process_github_url_for_downloading(url)
     elif _is_hf_url(url):
         url = _process_hf_url_for_downloading(url)
+
+    from huggingface_hub import get_session
+    import pyrfc6266
+    from tqdm import tqdm
 
     session = get_session()
     with session.get(url, stream=True, allow_redirects=True, **kwargs) as response:
@@ -130,6 +130,7 @@ def _process_github_url_for_downloading(url: str) -> str:
     :return: Processed URL for downloading
     :rtype: str
     """
+    from urlobject import URLObject
     return str(URLObject(url).add_query_param('raw', 'True'))
 
 
