@@ -25,18 +25,27 @@ It uses the `Mooshie/caformer_b36.dbv4-full` model by default and supports both 
    cd timmtagger-lite
    ```
 
-2. **Set up a virtual environment** (recommended):
-   ```bash
-   python -m venv venv
-   # On Windows:
-   .\venv\Scripts\activate
-   ```
+2. **Set up virtual environment and install dependencies**:
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *Note: This automatically installs `onnxruntime-directml` for GPU execution on Windows.*
+   * **On Windows (Interactive Wizard)**:
+     Double-click `install.bat`. It will automatically:
+     * Create the virtual environment (`venv`).
+     * Upgrade pip and install all project dependencies from `requirements.txt`.
+     * Prompt you to optionally pre-download the model for offline usage (storing it locally in `./local_model`).
+
+   * **Manual Setup (Cross-Platform)**:
+     ```bash
+     python -m venv venv
+     # Activate venv:
+     # On Windows:
+     .\venv\Scripts\activate
+     # On macOS/Linux:
+     source venv/bin/activate
+
+     # Install dependencies:
+     pip install -r requirements.txt
+     ```
+     *Note: Installing dependencies automatically sets up `onnxruntime-directml` for GPU/DirectML acceleration on Windows.*
 
 4. **Performance Optimization (Optional)**:
    For 4x–6x faster image preprocessing/resizing, you can replace standard `Pillow` with `pillow-simd` (requires compiling tools or custom pre-compiled wheels on Windows):
