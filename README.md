@@ -71,6 +71,14 @@ Adjust prediction thresholds using CLI parameters:
 python batch_inference.py <folder_path> --gen-threshold 0.39 --char-threshold 0.47 --rating-threshold 0.39
 ```
 
+### 4. Interactive Batch Runner (Windows)
+For a user-friendly wizard, double-click `run_inference.bat` on Windows. It will prompt you step-by-step for the required configuration:
+* Image directory path (you can drag-and-drop the directory directly into the terminal window)
+* Model repository ID or local directory path
+* Confidence thresholds for tags (general, character, rating)
+* Batch size (to prevent GPU/VRAM Out-of-Memory issues)
+* Hugging Face Hub token (optional, for accessing private/restricted models)
+
 ---
 
 ## Programmatic API

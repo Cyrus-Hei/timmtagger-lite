@@ -41,6 +41,11 @@ if "%rating_th%"=="" (
     set "rating_th=0.39"
 )
 
+set /p batch_size="Enter batch size to prevent VRAM OOM [Default: 16]: "
+if "%batch_size%"=="" (
+    set "batch_size=16"
+)
+
 set /p hf_token="Enter Hugging Face token (press Enter if none) [Default: none]: "
 
 echo.
@@ -50,6 +55,7 @@ echo   Model: %model%
 echo   General Threshold: %gen_th%
 echo   Character Threshold: %char_th%
 echo   Rating Threshold: %rating_th%
+echo   Batch Size: %batch_size%
 if not "%hf_token%"=="" (
     echo   HF Token: [HIDDEN]
 )
@@ -65,9 +71,9 @@ call venv\Scripts\activate.bat
 
 echo Running batch inference...
 if "%hf_token%"=="" (
-    python batch_inference.py "%folder_path%" --model "%model%" --gen-threshold %gen_th% --char-threshold %char_th% --rating-threshold %rating_th%
+    python batch_inference.py "%folder_path%" --model "%model%" --gen-threshold %gen_th% --char-threshold %char_th% --rating-threshold %rating_th% --batch-size %batch_size%
 ) else (
-    python batch_inference.py "%folder_path%" --model "%model%" --hf-token "%hf_token%" --gen-threshold %gen_th% --char-threshold %char_th% --rating-threshold %rating_th%
+    python batch_inference.py "%folder_path%" --model "%model%" --hf-token "%hf_token%" --gen-threshold %gen_th% --char-threshold %char_th% --rating-threshold %rating_th% --batch-size %batch_size%
 )
 
 :END
