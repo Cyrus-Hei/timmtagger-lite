@@ -117,7 +117,11 @@ class MultiLabelTIMMModel:
         """
         with self._lock:
             if self._model is None:
+                import time
+                print(f"[TimmTagger] Loading ONNX model '{self.repo_id}'...")
+                start_time = time.perf_counter()
                 self._model = open_onnx_model(self._get_file('model.onnx'))
+                print(f"[TimmTagger] ONNX model loaded successfully in {time.perf_counter() - start_time:.2f}s.")
 
         return self._model
 
@@ -130,7 +134,10 @@ class MultiLabelTIMMModel:
         """
         with self._lock:
             if self._df_tags is None:
+                import time
                 import csv
+                print("[TimmTagger] Loading tag metadata...")
+                start_time = time.perf_counter()
                 import numpy as np
                 with open(self._get_file('selected_tags.csv'), 'r', encoding='utf-8') as f:
                     reader = csv.DictReader(f)
@@ -155,6 +162,7 @@ class MultiLabelTIMMModel:
                     for category in sorted(set(self._tag_categories)):
                         self._category_names[category] = d_category_names[category]
                         self._name_to_categories[self._category_names[category]] = category
+                print(f"[TimmTagger] Loaded {len(self._tag_names)} tags metadata in {time.perf_counter() - start_time:.2f}s.")
 
         return self._df_tags
 
@@ -228,8 +236,13 @@ class MultiLabelTIMMModel:
         
         num_workers = min(batch_size, os.cpu_count() or 4)
 
+        import time
+        total_batches = (len(images) + batch_size - 1) // batch_size
         for i in range(0, len(images), batch_size):
             chunk = images[i:i + batch_size]
+            current_batch = i // batch_size + 1
+            print(f"[TimmTagger] Batch {current_batch}/{total_batches}: Processing {len(chunk)} images...")
+            start_time = time.perf_counter()
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 tensors = list(executor.map(_load_and_preprocess, chunk))
             
@@ -237,6 +250,7 @@ class MultiLabelTIMMModel:
             output_values = model.run(output_names, {'input': input_})
             for name, value in zip(output_names, output_values):
                 all_output_values[name].append(value)
+            print(f"[TimmTagger] Batch {current_batch}/{total_batches} finished in {time.perf_counter() - start_time:.2f}s.")
 
         return {name: np.concatenate(vals, axis=0) for name, vals in all_output_values.items()}
 

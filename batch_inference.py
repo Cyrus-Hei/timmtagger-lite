@@ -29,6 +29,9 @@ def main():
         print("No images found in the directory.")
         return
         
+    import time
+    start_total = time.perf_counter()
+
     print(f"Found {len(image_paths)} images. Starting batch prediction...")
     
     import onnxruntime as ort
@@ -36,6 +39,7 @@ def main():
     from imgutils.generic import multilabel_timm_predict_batch
     from imgutils.tagging import tags_to_text
     
+    start_inference = time.perf_counter()
     batch_results = multilabel_timm_predict_batch(
         [p.resolve() for p in image_paths],
         hf_token=args.hf_token,
@@ -43,7 +47,11 @@ def main():
         fmt=('general', 'character', 'rating'),
         batch_size=args.batch_size,
     )
+    inference_duration = time.perf_counter() - start_inference
+    print(f"Total inference and tagging finished in {inference_duration:.2f}s.")
     
+    print("Writing prediction tag files...")
+    start_write = time.perf_counter()
     for file_path, (general, character, rating) in zip(image_paths, batch_results):
         general_t = {k: v for k, v in general.items() if v >= args.gen_threshold}
         char_t = {k: v for k, v in character.items() if v >= args.char_threshold}
@@ -58,6 +66,13 @@ def main():
             print(f"Created/Overwrote: {txt_file_path.name}")
         except IOError as e:
             print(f"Could not write to {txt_file_path.name}: {e}")
+            
+    write_duration = time.perf_counter() - start_write
+    total_duration = time.perf_counter() - start_total
+    print(f"\n[Summary] Processed {len(image_paths)} images successfully:")
+    print(f"  - Inference time: {inference_duration:.2f}s (avg {inference_duration / len(image_paths):.3f}s per image)")
+    print(f"  - File writing time: {write_duration:.2f}s")
+    print(f"  - Total execution time: {total_duration:.2f}s")
         
 
 if __name__ == "__main__":
