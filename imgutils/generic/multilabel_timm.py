@@ -205,7 +205,6 @@ class MultiLabelTIMMModel:
 
 
     def _raw_predict_batch(self, images, preprocessor: Literal['test', 'val'] = 'test', batch_size: int = 16):
-        loaded_images = [load_image(img, force_background='white', mode='RGB') for img in images]
         model = self._open_model()
 
         val_trans, test_trans = self._open_preprocess()
@@ -218,11 +217,23 @@ class MultiLabelTIMMModel:
                 f'Unknown processor, "test" or "val" expected but {preprocessor!r} found.')
 
         import numpy as np
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _load_and_preprocess(img_item):
+            img = load_image(img_item, force_background='white', mode='RGB')
+            return trans(img)
+
         output_names = [output.name for output in model.get_outputs()]
         all_output_values = {name: [] for name in output_names}
-        for i in range(0, len(loaded_images), batch_size):
-            chunk = loaded_images[i:i + batch_size]
-            input_ = np.stack([trans(img) for img in chunk], axis=0)
+        
+        num_workers = min(batch_size, os.cpu_count() or 4)
+
+        for i in range(0, len(images), batch_size):
+            chunk = images[i:i + batch_size]
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                tensors = list(executor.map(_load_and_preprocess, chunk))
+            
+            input_ = np.stack(tensors, axis=0)
             output_values = model.run(output_names, {'input': input_})
             for name, value in zip(output_names, output_values):
                 all_output_values[name].append(value)

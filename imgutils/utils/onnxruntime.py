@@ -83,8 +83,7 @@ def _open_onnx_model(ckpt: str, provider: str, use_cpu: bool = True) -> 'Inferen
     else:
         options.graph_optimization_level = GraphOptimizationLevel.ORT_ENABLE_ALL
 
-    if provider == "CPUExecutionProvider":
-        options.intra_op_num_threads = os.cpu_count()
+
 
     providers = [provider]
     if use_cpu and "CPUExecutionProvider" not in providers:

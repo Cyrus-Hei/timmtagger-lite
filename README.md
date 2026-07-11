@@ -38,6 +38,13 @@ It uses the `Mooshie/caformer_b36.dbv4-full` model by default and supports both 
    ```
    *Note: This automatically installs `onnxruntime-directml` for GPU execution on Windows.*
 
+4. **Performance Optimization (Optional)**:
+   For 4x–6x faster image preprocessing/resizing, you can replace standard `Pillow` with `pillow-simd` (requires compiling tools or custom pre-compiled wheels on Windows):
+   ```bash
+   pip uninstall pillow
+   pip install pillow-simd
+   ```
+
 ---
 
 ## Usage
