@@ -21,7 +21,7 @@ This module is designed to work with multi-label classification tasks where imag
 belong to multiple categories and have multiple tags within each category.
 """
 
-import io
+
 import json
 import os
 import warnings
@@ -29,17 +29,14 @@ from threading import Lock
 from typing import Optional, Literal, Dict, Any, Union
 
 from hbutils.design import SingletonMark
-from hbutils.string import titleize
+
 
 from ..data import ImageTyping, load_image
 from ..preprocess import create_pillow_transforms
 from ..utils import open_onnx_model
 from ..utils import vreplace, ts_lru_cache
 
-try:
-    import gradio as gr
-except (ImportError, ModuleNotFoundError):
-    gr = None
+
 
 __all__ = [
     'MultiLabelTIMMModel',
@@ -47,18 +44,6 @@ __all__ = [
 ]
 
 
-def _check_gradio_env():
-    """
-    Verify that Gradio library is properly installed and available.
-
-    This function checks if the Gradio package is accessible for creating
-    web-based demos. If Gradio is not found, it provides instructions for installation.
-
-    :raises EnvironmentError: If Gradio package is not installed in the environment.
-    """
-    if gr is None:
-        raise EnvironmentError(f'Gradio required for launching webui-based demo.\n'
-                               f'Please install it with `pip install dghs-imgutils[demo]`.')
 
 
 FMT_UNSET = SingletonMark('FMT_UNSET')
@@ -140,18 +125,34 @@ class MultiLabelTIMMModel:
         """
         Load tag information.
 
-        :return: DataFrame containing tag information
-        :rtype: pandas.DataFrame
+        :return: Dict containing tag information arrays
+        :rtype: dict
         """
         with self._lock:
             if self._df_tags is None:
-                import pandas as pd
-                self._df_tags = pd.read_csv(self._get_file('selected_tags.csv'), keep_default_na=False)
+                import csv
+                import numpy as np
+                with open(self._get_file('selected_tags.csv'), 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    rows = list(reader)
+
+                self._tag_categories = np.array([int(r['category']) for r in rows], dtype=np.int32)
+                self._tag_names = np.array([r['name'] for r in rows], dtype=object)
+                if 'best_threshold' in rows[0] and rows[0]['best_threshold'] != '':
+                    self._tag_best_thresholds = np.array([float(r['best_threshold']) if r['best_threshold'] != '' else 0.4 for r in rows], dtype=np.float32)
+                else:
+                    self._tag_best_thresholds = None
+
+                self._df_tags = {
+                    'category': self._tag_categories,
+                    'name': self._tag_names,
+                    'best_threshold': self._tag_best_thresholds,
+                }
 
                 with open(self._get_file('categories.json'), 'r') as f:
                     d_category_names = {cate_item['category']: cate_item['name'] for cate_item in json.load(f)}
                     self._name_to_categories = {}
-                    for category in sorted(set(self._df_tags['category'])):
+                    for category in sorted(set(self._tag_categories)):
                         self._category_names[category] = d_category_names[category]
                         self._name_to_categories[self._category_names[category]] = category
 
@@ -183,17 +184,21 @@ class MultiLabelTIMMModel:
         """
         with self._lock:
             if self._default_category_thresholds is None:
-                import pandas as pd
                 from huggingface_hub.errors import EntryNotFoundError
                 try:
-                    df_category_thresholds = pd.read_csv(self._get_file('thresholds.csv'), keep_default_na=False)
+                    path = self._get_file('thresholds.csv')
                 except (EntryNotFoundError,):
                     self._default_category_thresholds = {}
                 else:
+                    import csv
                     self._default_category_thresholds = {}
-                    for item in df_category_thresholds.to_dict('records'):
-                        if item['category'] not in self._default_category_thresholds:
-                            self._default_category_thresholds[item['category']] = item['threshold']
+                    with open(path, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            cate = int(row['category'])
+                            threshold = float(row['threshold'])
+                            if cate not in self._default_category_thresholds:
+                                self._default_category_thresholds[cate] = threshold
 
         return self._default_category_thresholds
 
@@ -245,7 +250,7 @@ class MultiLabelTIMMModel:
                 fmt_val = fmt
 
             default_category_thresholds = self._open_default_category_thresholds()
-            if 'best_threshold' in self._df_tags:
+            if 'best_threshold' in self._df_tags and self._df_tags['best_threshold'] is not None:
                 default_tag_thresholds = self._df_tags['best_threshold']
             else:
                 default_tag_thresholds = None
@@ -279,7 +284,7 @@ class MultiLabelTIMMModel:
                     category_threshold = 0.4
 
                 if use_tag_thresholds and default_tag_thresholds is not None:
-                    tag_thresholds = default_tag_thresholds[mask].to_numpy()
+                    tag_thresholds = default_tag_thresholds[mask]
                     mask = category_pred >= tag_thresholds
                 else:
                     mask = category_pred >= category_threshold
@@ -295,153 +300,6 @@ class MultiLabelTIMMModel:
 
         return results
 
-    def make_ui(self, default_thresholds: Union[float, Dict[Any, float]] = None,
-                default_use_tag_thresholds: bool = True):
-        """
-        Create a Gradio UI for the model.
-
-        :param default_thresholds: Default threshold values to use in the UI
-        :type default_thresholds: Union[float, Dict[Any, float]]
-        :param default_use_tag_thresholds: Whether to use tag-level thresholds by default
-        :type default_use_tag_thresholds: bool
-
-        :return: None
-        :raises EnvironmentError: If Gradio is not installed
-        """
-        _check_gradio_env()
-        df_tags = self._open_tags()
-        default_category_thresholds = self._open_default_category_thresholds()
-        allow_use_tag_thresholds = 'best_threshold' in self._df_tags
-
-        with gr.Row():
-            with gr.Column():
-                with gr.Row():
-                    gr_input_image = gr.Image(type='pil', label='Original Image')
-                with gr.Row(visible=allow_use_tag_thresholds):
-                    gr_use_tag_thresholds = gr.Checkbox(
-                        value=allow_use_tag_thresholds and default_use_tag_thresholds,
-                        label='Use Tag-Level Thresholds',
-                        interactive=allow_use_tag_thresholds,
-                        visible=allow_use_tag_thresholds,
-                    )
-                    gr.HTML(
-                        value="<div style='font-size: 0.8em; color: var(--color-text-secondary); margin-top: 0.3em;'>"
-                              "<b>Note:</b> Category thresholds will be ignored when tag-level thresholds enabled!!!</div>",
-                        visible=allow_use_tag_thresholds
-                    )
-                with gr.Row():
-                    gr_thresholds = []
-                    for category in sorted(set(df_tags['category'].tolist())):
-                        if isinstance(default_thresholds, float):
-                            category_threshold = default_thresholds
-                        elif isinstance(default_thresholds, dict) and \
-                                (category in default_thresholds or self._category_names[
-                                    category] in default_thresholds):
-                            if category in default_thresholds:
-                                category_threshold = default_thresholds[category]
-                            elif self._category_names[category] in default_thresholds:
-                                category_threshold = default_thresholds[self._category_names[category]]
-                            else:
-                                assert False, 'Should not reach this line'  # pragma: no cover
-                        elif category in default_category_thresholds:
-                            category_threshold = default_category_thresholds[category]
-                        else:
-                            category_threshold = 0.4
-
-                        gr_cate_threshold = gr.Slider(
-                            minimum=0.0,
-                            maximum=1.0,
-                            value=category_threshold,
-                            step=0.001,
-                            label=f'Threshold for {titleize(self._category_names[category])}',
-                        )
-                        gr_thresholds.append(gr_cate_threshold)
-
-                with gr.Row():
-                    gr_submit = gr.Button(value='Submit', variant='primary')
-
-            with gr.Column():
-                with gr.Tabs():
-                    gr_preds = []
-                    for category in sorted(set(df_tags['category'].tolist())):
-                        with gr.Tab(f'{titleize(self._category_names[category])}'):
-                            gr_cate_label = gr.Label(f'{titleize(self._category_names[category])} Prediction')
-                            gr_preds.append(gr_cate_label)
-
-                    with gr.Tab('Text Output'):
-                        gr_text_output = gr.TextArea(label="Output (string)", lines=15)
-
-            def _fn_submit(image, _use_tag_thresholds, *thresholds):
-                if _use_tag_thresholds:
-                    _ths = None
-                else:
-                    _ths = {
-                        category: cate_ths
-                        for category, cate_ths in zip(sorted(set(df_tags['category'].tolist())), thresholds)
-                    }
-
-                fmt = tuple(self._category_names[category] for category in sorted(set(df_tags['category'].tolist())))
-                res = self.predict(
-                    image=image,
-                    thresholds=_ths,
-                    use_tag_thresholds=_use_tag_thresholds,
-                    fmt=fmt,
-                )
-                with io.StringIO() as sf:
-                    for category, res_item in zip(sorted(set(df_tags['category'].tolist())), res):
-                        print(f'# {self._category_names[category]} (#{category})', file=sf)
-                        print(', '.join(res_item.keys()), file=sf)
-                        print('', file=sf)
-
-                    return sf.getvalue(), *res
-
-            gr_submit.click(
-                fn=_fn_submit,
-                inputs=[gr_input_image, gr_use_tag_thresholds, *gr_thresholds],
-                outputs=[gr_text_output, *gr_preds]
-            )
-
-    def launch_demo(self, default_thresholds: Union[float, Dict[Any, float]] = None,
-                    default_use_tag_thresholds: bool = True,
-                    server_name: Optional[str] = None, server_port: Optional[int] = None, **kwargs):
-        """
-        Launch a Gradio demo for the model.
-
-        :param default_thresholds: Default threshold values to use in the demo
-        :type default_thresholds: Union[float, Dict[Any, float]]
-        :param default_use_tag_thresholds: Whether to use tag-level thresholds by default
-        :type default_use_tag_thresholds: bool
-        :param server_name: Server name for the Gradio app
-        :type server_name: Optional[str]
-        :param server_port: Server port for the Gradio app
-        :type server_port: Optional[int]
-        :param kwargs: Additional keyword arguments to pass to gr.launch()
-        :type kwargs: Any
-
-        :return: None
-        :raises EnvironmentError: If Gradio is not installed
-        """
-        _check_gradio_env()
-        from hfutils.repository import hf_hub_repo_url
-        with gr.Blocks() as demo:
-            with gr.Row():
-                with gr.Column():
-                    repo_url = hf_hub_repo_url(repo_id=self.repo_id, repo_type='model')
-                    gr.HTML(f'<h2 style="text-align: center;">Tagger Demo For {self.repo_id}</h2>')
-                    gr.Markdown(f'This is the quick demo for tagger model [{self.repo_id}]({repo_url}). '
-                                f'Powered by `dghs-imgutils`\'s quick demo module.')
-
-            with gr.Row():
-                self.make_ui(
-                    default_thresholds=default_thresholds,
-                    default_use_tag_thresholds=default_use_tag_thresholds,
-                )
-
-        demo.launch(
-            server_name=server_name,
-            server_port=server_port,
-            **kwargs,
-        )
 
 
 @ts_lru_cache()
